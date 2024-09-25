@@ -1,7 +1,7 @@
+import hashlib
 import pandas as pd
 
-
-def generate_csv(data, n, filename='data.csv'):
+def generate_csv(data, n, filename='data.csv', smiles_name="d1_smiles"):
     """
     Generates a CSV file with n rows, repeating the provided data.
 
@@ -9,12 +9,16 @@ def generate_csv(data, n, filename='data.csv'):
         data (dict): A dictionary containing the data for each column. The keys should match the column names.
         n (int): The number of rows to generate.
         filename (str): The name of the output CSV file. Default is 'data.csv'.
+        smiles_name (str): The name of the SMILES column. Default is 'd1_smiles'.
     """
     # Create a DataFrame with the provided data
     df = pd.DataFrame([data] * n)
 
     # Add an 'id' column with unique values
-    df['id'] = range(1, n + 1)
+    # NOTE FOR ZACH: I changed 'id' to '_id' because 'id' is a defined term in Python so this avoids future confusion.
+    # NOTE FOR ZACH: I made the identifier a hash values because these are all of the same length. Also it is directly
+    # related to the SMILES value so there should be no duplicate hashes IFF there are no duplicate smiles
+    df['_id'] = df[smiles_name].apply(lambda x: hashlib.md5(x.encode()).hexdigest())
 
     # Save the DataFrame to a CSV file
     df.to_csv(filename, index=False)
@@ -71,8 +75,8 @@ ex_data = {
           H  -5.074415 1.785623  1.225984""",
 }
 
-n_rows = 3  # Number of rows you want in the CSV
-generate_csv(ex_data, n_rows, filename='data_10mil_actual.csv')
+n_rows = 100  # Number of rows you want in the CSV
+generate_csv(ex_data, n_rows, filename='data/data_10mil_actual.csv')
 
 ex_data_2 = {
     'd1_smiles': "c5ccc4cc3cc2cc1ccccc1cc2cc3cc4c5",
@@ -80,4 +84,4 @@ ex_data_2 = {
     'd3_xyz': 123,  # Placeholder
 }
 
-generate_csv(ex_data_2, n_rows, filename='data_10mil_reference.csv')
+generate_csv(ex_data_2, n_rows, filename='data/data_10mil_reference.csv')
