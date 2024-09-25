@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 def generate_csv(data, n, filename='data.csv'):
     """
     Generates a CSV file with n rows, repeating the provided data.
@@ -18,8 +19,9 @@ def generate_csv(data, n, filename='data.csv'):
     # Save the DataFrame to a CSV file
     df.to_csv(filename, index=False)
 
+
 # Example usage
-data = {
+ex_data = {
     'd1_smiles': "c5ccc4cc3cc2cc1ccccc1cc2cc3cc4c5",
     'd2_graph': """Vertices: [(0, 'C'), (1, 'C'), (2, 'C'), (3, 'C'), (4, 'C'), (5, 'C'), (6, 'C'), (7, 'C'), (8, 'C'), (9, 'C'),
     (10, 'C'), (11, 'C'), (12, 'C'), (13, 'C'), (14, 'C'), (15, 'C'), (16, 'C'), (17, 'C'), (18, 'C'), (19, 'C'),
@@ -69,13 +71,13 @@ data = {
           H  -5.074415 1.785623  1.225984""",
 }
 
-n = 3  # Number of rows you want in the CSV
-generate_csv(data, n,filename='data_10mil_actual.csv')
+n_rows = 3  # Number of rows you want in the CSV
+generate_csv(ex_data, n_rows, filename='data_10mil_actual.csv')
 
-data = {
+ex_data_2 = {
     'd1_smiles': "c5ccc4cc3cc2cc1ccccc1cc2cc3cc4c5",
     'd2_graph': 123,  # Placeholder
-    'd3_xyz': 123,    # Placeholder
+    'd3_xyz': 123,  # Placeholder
 }
 
-generate_csv(data, n,filename='data_10mil_reference.csv')
+generate_csv(ex_data_2, n_rows, filename='data_10mil_reference.csv')
