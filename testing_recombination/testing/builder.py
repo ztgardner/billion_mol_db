@@ -7,24 +7,96 @@ import ast
 from rdkit import Chem
 import selfies as sf
 import time
+import hashlib
 
-def process_n_rows(procnumber, n):
-    """Processes n rows from combinations_proc.parquet and updates their SMILES and SELFIES."""
-
-    start_time = time.time()  # Start the timer
+def update_smiles_hash_in_parquet(procnumber):
+    """Computes a hash of the SMILES column and updates the 'id' column in combinations_proc.parquet."""
 
     combinations_file = f"output/combinations_{procnumber}.parquet"
-    con = duckdb.connect()
 
-    # Load first `n` rows
+    # Load Parquet file into Pandas
     try:
-        df = con.execute(f"SELECT * FROM read_parquet('{combinations_file}') LIMIT {n}").df()
+        df = pd.read_parquet(combinations_file)
     except Exception as e:
         print(f"❌ Error loading {combinations_file}: {e}")
         return
 
-    # Iterate over each row sequentially
-    for row_index in range(min(n, len(df))):
+    # Ensure 'smiles' column exists
+    if "smiles" not in df.columns:
+        print(f"❌ 'smiles' column not found in {combinations_file}. Skipping update.")
+        return
+
+    # Compute SHA-256 hash of each SMILES string and update the 'id' column
+    def hash_smiles(smiles):
+        return hashlib.sha256(smiles.encode()).hexdigest() if isinstance(smiles, str) else None
+
+    df["id"] = df["smiles"].apply(hash_smiles)
+
+    # Write the modified DataFrame back to Parquet
+    try:
+        df.to_parquet(combinations_file, index=False)
+        print(f"✅ SMILES hashes updated successfully in 'id' column for {combinations_file}")
+    except Exception as e:
+        print(f"❌ Error writing back to {combinations_file}: {e}")
+
+def remove_duplicate_rows(procnumber):
+    """Removes duplicate rows based on the 'id' column in combinations_proc.parquet."""
+
+    combinations_file = f"output/combinations_{procnumber}.parquet"
+
+    # Load Parquet file into Pandas
+    try:
+        df = pd.read_parquet(combinations_file)
+    except Exception as e:
+        print(f"❌ Error loading {combinations_file}: {e}")
+        return
+
+    # Remove duplicates based on 'id' column while keeping the first occurrence
+    df = df.drop_duplicates(subset=["id"], keep="first")
+
+    # Write the cleaned DataFrame back to Parquet
+    try:
+        df.to_parquet(combinations_file, index=False)
+        print(f"✅ Duplicate rows removed successfully from {combinations_file}")
+    except Exception as e:
+        print(f"❌ Error writing back to {combinations_file}: {e}")
+
+def count_rows(procnumber):
+    """Counts the number of rows in combinations_{procnumber}.parquet using DuckDB."""
+    combinations_file = f"output/combinations_{procnumber}.parquet"
+    con = duckdb.connect()
+
+    try:
+        result = con.execute(f"SELECT COUNT(*) FROM read_parquet('{combinations_file}')").fetchone()
+        con.close()
+        return result[0] if result else 0
+    except Exception as e:
+        print(f"❌ Error counting rows in {combinations_file}: {e}")
+        con.close()
+        return 0
+
+def process_n_rows(procnumber):
+    """Processes all rows from combinations_{procnumber}.parquet and updates their SMILES and SELFIES."""
+    start_time = time.time()  # Start the timer
+    combinations_file = f"output/combinations_{procnumber}.parquet"
+
+    # Get the number of rows dynamically
+    n = count_rows(procnumber)
+    if n == 0:
+        print(f"⚠️ No rows to process in {combinations_file}. Exiting.")
+        return
+
+    con = duckdb.connect()
+
+    # Load the data
+    try:
+        df = con.execute(f"SELECT * FROM read_parquet('{combinations_file}')").df()
+    except Exception as e:
+        print(f"❌ Error loading {combinations_file}: {e}")
+        return
+
+    # Process each row
+    for row_index in range(n):
         row_start_time = time.time()  # Start time for this row
 
         ring_id = df.iloc[row_index]["id_ring"]
@@ -55,11 +127,11 @@ def process_n_rows(procnumber, n):
         smiles_string = graph_to_smiles(final_graph)
         if smiles_string:
             print(f"✅ Final SMILES: {smiles_string}")
-            update_smiles_in_parquet(procnumber, smiles_string, row_index)  # ✅ Now updates by row_index
+            update_smiles_in_parquet(procnumber, smiles_string, row_index)
 
             # Convert to SELFIES
             selfies_string = smiles_to_selfies(smiles_string)
-            update_selfies_in_parquet(procnumber, selfies_string, row_index)  # ✅ Now updates by row_index
+            update_selfies_in_parquet(procnumber, selfies_string, row_index)
         else:
             print(f"⚠️ SMILES conversion failed for row {row_index + 1}, skipping update.")
 
@@ -449,9 +521,10 @@ def smiles_to_selfies(smiles):
 if __name__ == "__main__":
     try:
         procnumber = int(sys.argv[1])
-        num_rows = int(sys.argv[2]) if len(sys.argv) > 2 else 1  # Default: 1 row
     except (IndexError, ValueError):
         print("Error: Invalid arguments. Usage: python builder.py <procnumber> <num_rows>")
         sys.exit(1)
 
-    process_n_rows(procnumber, num_rows)
+    process_n_rows(procnumber)
+    update_smiles_hash_in_parquet(procnumber)
+    remove_duplicate_rows(procnumber)
